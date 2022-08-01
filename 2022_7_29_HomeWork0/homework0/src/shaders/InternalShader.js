@@ -80,7 +80,7 @@ void main(void) {
 const PhongVertexShader = `
 attribute vec3 aVertexPosition;
 attribute vec3 aNormalPosition;
-attribute vec3 aTextureCoord;
+attribute vec2 aTextureCoord;
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
@@ -138,6 +138,6 @@ void main(void) {
   spec = pow(max(dot(viewDir, reflectDir), 0.0), 35.0);
   vec3 specular = uKs * light_atten_coff * spec;
 
-  gl_FragColor = vec4(pow((ambient + diffuse + specular), vec3(1.0/2.2)), 1.0)
+  gl_FragColor = vec4(pow((ambient + diffuse + specular), vec3(1.0/2.2)), 1.0);
 }
 `;
