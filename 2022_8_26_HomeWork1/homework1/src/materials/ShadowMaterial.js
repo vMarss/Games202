@@ -11,7 +11,7 @@ class ShadowMaterial extends Material {
 
 async function buildShadowMaterial(light, translate, scale, vertexPath, fragmentPath) {
 
-
+    // await 异步读取shader文件
     let vertexShader = await getShaderString(vertexPath);
     let fragmentShader = await getShaderString(fragmentPath);
 
