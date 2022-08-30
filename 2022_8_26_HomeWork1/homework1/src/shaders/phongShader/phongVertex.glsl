@@ -22,4 +22,7 @@ void main(void) {
 
   vTextureCoord = aTextureCoord;
   vPositionFromLight = uLightMVP * vec4(aVertexPosition, 1.0);
+
+  // 对于每个传入的模型顶点数据，都将其位置从世界坐标空间转换到光的坐标空间，如此可以直观的看到模型在光照坐标空间下的位置信息等
+  // gl_Position = vPositionFromLight;
 }
