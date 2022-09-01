@@ -86,10 +86,33 @@ void uniformDiskSamples( const in vec2 randomSeed ) {
 }
 
 float findBlocker( sampler2D shadowMap,  vec2 uv, float zReceiver ) {
-	return 1.0;
+
+  float totalDepth = 0.;
+  int blockerCount = 0;
+  float bias = 0.005;
+
+  poissonDiskSamples(uv);
+
+  // 计算该点范围内的遮挡Blocker的depth
+  for(int i = 0; i < NUM_SAMPLES; i++){
+    // 这里需要除以一个值貌似是因为poissonDisk给定的范围太远了？它给定的是在什么区间内的坐标呢？
+    vec2 sampleCoor = uv + poissonDisk[i] / 8000.;
+    float shadowDepthTmp = unpack(texture2D(shadowMap, sampleCoor));
+    // 被遮挡的记录遮挡物的深度，求平均值
+    if(shadowDepthTmp < (zReceiver - bias)){
+      totalDepth += shadowDepthTmp;
+      blockerCount += 1;
+    }
+  }
+
+  if(blockerCount==NUM_SAMPLES){
+    return 2.0;
+  }
+
+	return totalDepth / float(blockerCount);
 }
 
-float PCF(sampler2D shadowMap, vec4 coords) {
+float PCF(sampler2D shadowMap, vec4 coords, float filterSize) {
   // 1. 采样ShadowMap上该点周围一块区域的深度，并得出其平均深度来计算
   // 1.0 确定一个随机种子
   vec2 randomSeed = vec2(5.0, 4.0);
@@ -111,33 +134,40 @@ float PCF(sampler2D shadowMap, vec4 coords) {
   float filterRange = filterStride / textureSize;
 
   // 1.2 记录范围内有多少个ShadingPoint是被遮挡的
-  float sumBlock = 0.0;
+  float sumNotBlock = 0.0;
   float bias = 0.005;
   for(int i = 0; i < NUM_SAMPLES; i++){
-    vec2 shadowCoord = coords.xy + poissonDisk[i] * filterRange;
+    // 这里需要除以一个值貌似是因为poissonDisk给定的范围太远了？它给定的是在什么区间内的坐标呢？
+    vec2 shadowCoord = coords.xy + poissonDisk[i] / filterSize;
     float shadowDepthTmp = unpack(texture2D(shadowMap, shadowCoord));
     if(shadowDepthTmp > (coords.z - bias)){
-      sumBlock += 1.0;
+      sumNotBlock += 1.0;
     }
   }
 
   // 3. 如果ShadowMap的深度小于顶点的实际深度，说明被遮挡，显示为阴影，这里赋为0，在外面与color点乘时为黑色
-  return sumBlock / float(NUM_SAMPLES);
+  return sumNotBlock / float(NUM_SAMPLES);
 }
 
 float PCSS(sampler2D shadowMap, vec4 coords){
 
   // STEP 1: avgblocker depth
+  float blockerDepth = findBlocker(shadowMap, coords.xy, coords.z);
+  // if(blockerDepth < EPS) return 1.0;
+  // if(blockerDepth > 1.0) return 0.0;
 
   // STEP 2: penumbra size
+  float lightWidth = 0.01;
+  float penumbra = (coords.z - blockerDepth) * lightWidth / blockerDepth;
 
   // STEP 3: filtering
-  
-  return 1.0;
+  // return penumbra /100.;
+  return PCF(shadowMap, coords, penumbra * 1000.);
 
 }
 
 
+// 原汁原味shadowMap
 float useShadowMap(sampler2D shadowMap, vec4 shadowCoord){
   // 1. 采样ShadowMap上该点的深度
   float shadowDepth = unpack(texture2D(shadowMap, shadowCoord.xy));
@@ -189,12 +219,14 @@ void main(void) {
   // 4. 获取ShadowMap在该点是否为阴影
   // 4.1 原汁原味的ShadowMap
   // visibility = useShadowMap(uShadowMap, vec4(shadowCoord, 1.0));
+
   // 4.2 PCF软阴影实现方案
-  visibility = PCF(uShadowMap, vec4(shadowCoord, 1.0));
-  //visibility = PCSS(uShadowMap, vec4(shadowCoord, 1.0));
+  // visibility = PCF(uShadowMap, vec4(shadowCoord, 1.0), 200.);
+
+  // 4.3 PCSS阴影实现方案，离物体越近影子越硬
+  visibility = PCSS(uShadowMap, vec4(shadowCoord, 1.0));
 
   vec3 phongColor = blinnPhong();
-
   gl_FragColor = vec4(phongColor * visibility, 1.0);
   // gl_FragColor = vec4(phongColor, 1.0);
 }
