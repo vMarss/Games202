@@ -87,16 +87,19 @@ void uniformDiskSamples( const in vec2 randomSeed ) {
 
 float findBlocker( sampler2D shadowMap,  vec2 uv, float zReceiver ) {
 
-  float totalDepth = 0.;
+  float totalDepth = 0.0;
   int blockerCount = 0;
   float bias = 0.005;
 
-  poissonDiskSamples(uv);
+  float filterStride = 1.0;
+  float textureSize = 2048.0;
+  float filterSize = 20.0; 
+  float filterRange = filterStride / textureSize * filterSize;
 
   // 计算该点范围内的遮挡Blocker的depth
   for(int i = 0; i < NUM_SAMPLES; i++){
     // 这里需要除以一个值貌似是因为poissonDisk给定的范围太远了？它给定的是在什么区间内的坐标呢？
-    vec2 sampleCoor = uv + poissonDisk[i] / 8000.;
+    vec2 sampleCoor = poissonDisk[i] * filterRange + uv;
     float shadowDepthTmp = unpack(texture2D(shadowMap, sampleCoor));
     // 被遮挡的记录遮挡物的深度，求平均值
     if(shadowDepthTmp < (zReceiver - bias)){
@@ -105,8 +108,12 @@ float findBlocker( sampler2D shadowMap,  vec2 uv, float zReceiver ) {
     }
   }
 
+  if(blockerCount == 0){
+    return 1.0;
+  }
+
   if(blockerCount==NUM_SAMPLES){
-    return 2.0;
+    return 0.0;
   }
 
 	return totalDepth / float(blockerCount);
@@ -118,7 +125,7 @@ float PCF(sampler2D shadowMap, vec4 coords, float filterSize) {
   vec2 randomSeed = vec2(5.0, 4.0);
 
   // 1.1.1 采用泊松圆盘采样
-  poissonDiskSamples(randomSeed);
+  // poissonDiskSamples(randomSeed);
 
   // 1.1.2 采用均匀圆盘采样
   // uniformDiskSamples(randomSeed);
@@ -138,7 +145,7 @@ float PCF(sampler2D shadowMap, vec4 coords, float filterSize) {
   float bias = 0.005;
   for(int i = 0; i < NUM_SAMPLES; i++){
     // 这里需要除以一个值貌似是因为poissonDisk给定的范围太远了？它给定的是在什么区间内的坐标呢？
-    vec2 shadowCoord = coords.xy + poissonDisk[i] / filterSize;
+    vec2 shadowCoord = coords.xy + poissonDisk[i] * filterSize;
     float shadowDepthTmp = unpack(texture2D(shadowMap, shadowCoord));
     if(shadowDepthTmp > (coords.z - bias)){
       sumNotBlock += 1.0;
@@ -151,19 +158,35 @@ float PCF(sampler2D shadowMap, vec4 coords, float filterSize) {
 
 float PCSS(sampler2D shadowMap, vec4 coords){
 
+  poissonDiskSamples(coords.xy);
+
   // STEP 1: avgblocker depth
   float blockerDepth = findBlocker(shadowMap, coords.xy, coords.z);
   // if(blockerDepth < EPS) return 1.0;
   // if(blockerDepth > 1.0) return 0.0;
 
   // STEP 2: penumbra size
-  float lightWidth = 0.01;
+  float lightWidth = 10.0;
   float penumbra = (coords.z - blockerDepth) * lightWidth / blockerDepth;
 
   // STEP 3: filtering
   // return penumbra /100.;
-  return PCF(shadowMap, coords, penumbra * 1000.);
-
+  // return PCF(shadowMap, coords, 0.0001);
+  return PCF(shadowMap, coords, penumbra * 0.001);
+  
+  // float textureSize = 2048.;
+  // float filterStride = 2.0;
+  // float filterRange = 1.0 / textureSize * filterStride * penumbra;
+  // int noShadowCount = 0;
+  // for(int i = 0; i < NUM_SAMPLES; i++){
+  //   vec2 sampleCoor = poissonDisk[i] * filterRange + coords.xy;
+  //   float closestDepth = unpack(texture2D(shadowMap, sampleCoor));
+  //   if (coords.z < closestDepth + 0.01){
+  //     noShadowCount += 1;
+  //   }
+  // }
+  // float shadow = float(noShadowCount) / float(NUM_SAMPLES);
+  // return shadow;
 }
 
 
